@@ -1,0 +1,895 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(DESeq2)
+library(tidyverse)
+```
+
+```{r}
+feature_counts <- read.csv("D:\\Shruti\\FEATURE COUNTS cre163.csv", header = TRUE, row.names = 1)
+feature_counts
+names(feature_counts) <- sub("^X", "", names(feature_counts))
+feature_counts
+```
+
+
+```{r}
+col_data <- read.csv("D:\\Shruti\\METADATA2.csv", header = TRUE, row.names = 1)
+col_data
+
+```
+
+
+```{r}
+colnames(feature_counts) == rownames(col_data)
+all(colnames(feature_counts) %in% rownames(col_data))
+```
+```{r}
+dds_2 <- DESeqDataSetFromMatrix(countData = feature_counts,
+                       colData = col_data,
+                       design = ~ treatment)
+
+dds_2
+```
+```{r}
+# pre-filtering: removing rows with low gene counts
+# keeping rows that have at least 10 reads total
+keep <- rowSums(counts(dds_2)) >= 10
+
+dds_2 <- dds_2[keep,]
+
+dds_2
+```
+```{r}
+dds_2$treatment <- relevel(dds_2$treatment, ref = "BM")
+```
+
+```{r}
+#colData(dds)
+#dds <- collapseReplicates(dds, dds$treatment)
+# Step 3: Run DESeq ----------------------
+dds_2 <- DESeq(dds_2)
+res_2 <- results(dds_2)
+
+res_2
+```
+```{r}
+# Explore Results ----------------
+
+summary(res_2)
+
+res_2_0.05 <- results(dds_2, alpha = 0.05)
+summary(res_2_0.05)
+
+# contrasts
+resultsNames(dds_2)
+
+
+
+# MA plot
+plotMA(res_2)
+
+```
+```{r}
+d1 <- as.data.frame(results(dds_2, contrast = c("treatment", "1hr", "BM")))
+#d1 <- d1[d1$padj < 0.05, ]
+d1 <- na.omit(d1)
+d1 <- d1 %>% arrange(d1$log2FoldChange)
+summary(d1)
+write.csv(d1, "D:\\Shruti\\bulk seq\\1hr vs BM_withoutfilter.csv")
+
+```
+
+```{r}
+d2 <- as.data.frame(results(dds_2, contrast = c("treatment", "2hr", "BM")))
+#d2 <- d2[d2$padj < 0.05, ]
+d2 <- na.omit(d2)
+#d2$ensembl_gene_id <- rownames(d2)
+#d2 <- merge(d2, G_list, by = "ensembl_gene_id", all.x = T)
+d2 <- d2 %>% arrange(d2$log2FoldChange)
+write.csv(d2, "D:\\Shruti\\bulk seq\\2hr vs BM_withoutfilter.csv")
+```
+
+```{r}
+d3 <- as.data.frame(results(dds_2, contrast = c("treatment", "4hr", "BM")))
+#d3 <- d3[d3$padj < 0.05, ]
+d3 <- na.omit(d3)
+#d3$ensembl_gene_id <- rownames(d3)
+#d3 <- merge(d3, G_list, by = "ensembl_gene_id", all.x = T)
+d3 <- d3 %>% arrange(d3$log2FoldChange)
+write.csv(d3, "D:\\Shruti\\bulk seq\\4hr vs BM_withoutfilter.csv")
+```
+
+```{r}
+normalized_counts <- counts(dds_2, normalized = T)
+```
+
+```{r}
+library(ggplot2)
+plotDispEsts(dds_2)
+
+
+
+```
+```{r}
+vsd <- vst(dds_2, blind = F)
+plotPCA(vsd, intgroup = colnames(col_data))
+
+
+
+```
+```{r}
+plotPCA(vsd, intgroup = c("mouse"))
+plotPCA(vsd, intgroup = c("treatment"))
+
+```
+```{r}
+library(pheatmap)
+install.packages("RColorBrewer")
+library(RColorBrewer)
+
+sampleDists <- dist(t(assay(vsd)))
+sampleDistMatrix <- as.matrix(sampleDists)
+colnames(sampleDistMatrix)
+
+colors <- colorRampPalette(rev(brewer.pal(9, "Blues")))(225)
+
+pheatmap(sampleDistMatrix, clustering_distance_rows = sampleDists, clustering_distance_cols = sampleDists)#, col =  colors)
+```
+```{r}
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("org.Mm.eg.db")
+
+BiocManager::install("AnnotationDbi")
+```
+```{r}
+library("org.Mm.eg.db")
+library(AnnotationDbi)
+```
+```{r}
+d1.df <- as.data.frame(d1)
+d1.df
+```
+```{r}
+d1.df$SYMBOL <- mapIds(org.Mm.eg.db, keys = rownames(d1.df), keytype = "ENSEMBL", column = "SYMBOL")
+columns(org.Mm.eg.db)
+d1.df$GENE <- mapIds(org.Mm.eg.db, keys = rownames(d1.df), keytype = "ENSEMBL", column = "GENENAME")
+```
+```{r}
+d1.df
+write.csv(d1.df, "D:\\Shruti\\bulk seq\\1hrvBM_filtered.csv")
+d1.df <- na.omit(d1.df)
+write.csv(d1.df, "D:\\Shruti\\bulk seq\\1hrvBM_geneID.csv")
+
+```
+
+```{r}
+d2.df <- as.data.frame(d2)
+d2.df
+d2.df$SYMBOL <- mapIds(org.Mm.eg.db, keys = rownames(d2.df), keytype = "ENSEMBL", column = "SYMBOL")
+d2.df$GENE <- mapIds(org.Mm.eg.db, keys = rownames(d2.df), keytype = "ENSEMBL", column = "GENENAME")
+d2.df <- na.omit(d2.df)
+write.csv(d2.df, "D:\\Shruti\\bulk seq\\2hrvBM_geneID.csv")
+```
+```{r}
+d3.df <- as.data.frame(d3)
+d3.df
+d3.df$SYMBOL <- mapIds(org.Mm.eg.db, keys = rownames(d3.df), keytype = "ENSEMBL", column = "SYMBOL")
+d3.df$GENE <- mapIds(org.Mm.eg.db, keys = rownames(d3.df), keytype = "ENSEMBL", column = "GENENAME")
+d3.df <- na.omit(d3.df)
+write.csv(d3.df, "D:\\Shruti\\bulk seq\\4hrvBM_geneID.csv")
+```
+
+```{r}
+d1.df["ENSMUSG00000112796",]
+```
+```{r}
+# filtered_d1 <- d1.df %>% filter(d1.df$padj < 0.05)
+# filtered_df1 <- d1.df[abs(d1.df$log2FC) >= 0.5, ]
+# dim(d1.df)
+# dim(filtered_d1)
+# filtered_d1
+# filtered_d1 <- na.omit(filtered_d1)
+# filtered_d1
+# write.csv(filtered_d1, "D:/Shruti/bulk seq/1hrvsBM_padj_0.05.csv")
+# 
+# d1.df <- na.omit(d1.df)
+```
+```{r}
+# filtered_d2 <- d2.df %>% filter(d2.df$padj < 0.05)
+# #filtered_df1 <- d1.df[abs(d1.df$log2FC) >= 0.5, ]
+# dim(d2.df)
+# dim(filtered_d2)
+# filtered_d2
+# filtered_d2 <- na.omit(filtered_d2)
+# filtered_d2
+# write.csv(filtered_d2, "D:/Shruti/bulk seq/2hrvsBM_padj_0.05.csv")
+```
+
+```{r}
+# filtered_d3 <- d3.df %>% filter(d3.df$padj < 0.05)
+# #filtered_df1 <- d1.df[abs(d1.df$log2FC) >= 0.5, ]
+# dim(d3.df)
+# dim(filtered_d3)
+# filtered_d3
+# filtered_d3 <- na.omit(filtered_d3)
+# filtered_d3
+# write.csv(filtered_d3, "D:/Shruti/bulk seq/4hrvsBM_padj_0.05.csv")
+```
+
+
+
+
+```{r}
+#DEG_up <- filter(res.df, log2FoldChange > 1.5 & padj <0.05)$symbol
+#DEG_down <- filter(res.df, log2FoldChange < -1.5 & padj <0.05)$symbol
+
+
+d1_DEG_up <- filter(d1.df, d1.df$log2FoldChange > 0.5 & d1.df$padj <0.05)
+d1_DEG_down <- filter(d1.df, d1.df$log2FoldChange < -0.5 & d1.df$padj <0.05)
+d1_DEG_up <- na.omit(d1_DEG_up)
+d1_DEG_down <- na.omit(d1_DEG_down)
+
+write.csv(d1_DEG_up, "D://Shruti//bulk seq//1hrvsBM_up.csv")
+write.csv(d1_DEG_down, "D://Shruti//bulk seq//1hrvsBM_down.csv")
+
+
+d2_DEG_up <- filter(d2.df, d2.df$log2FoldChange > 0.5 & d2.df$padj <0.05)
+d2_DEG_down <- filter(d2.df, d2.df$log2FoldChange < -0.5 & d2.df$padj <0.05)
+d2_DEG_up <- na.omit(d2_DEG_up)
+d2_DEG_down <- na.omit(d2_DEG_down)
+
+write.csv(d2_DEG_up, "D://Shruti//bulk seq//2hrvsBM_up.csv")
+write.csv(d2_DEG_down, "D://Shruti//bulk seq//2hrvsBM_down.csv")
+
+```
+
+
+```{r}
+#dataaa <- read.delim("C:\\Users\\LAB20\\Downloads\\GSE107011_Processed_data_TPM.txt\\GSE107011_Processed_data_TPM.txt", header = TRUE)
+#dataaa
+```
+```{r}
+#BiocManager::install("granulator")
+```
+```{r}
+library(EnhancedVolcano)
+
+```
+```{r}
+BiocManager::install("clusterProfiler")
+BiocManager::install("pathview")
+BiocManager::install("enrichplot")
+install.packages("igraph", dependencies = TRUE)
+library(igraph)
+library(clusterProfiler)
+library(enrichplot)
+# we use ggplot2 to add x axis labels (ex: ridgeplot)
+library(ggplot2)
+
+install.packages("remotes")
+remotes::install_github("igraph/rigraph")
+```
+
+
+#GENE SET ENRICHMENT ANALYSIS
+```{r}
+# reading in data from deseq2
+#df = read.csv("drosphila_example_de.csv", header=TRUE)
+
+#GSEA for 1hr vs BM
+# we want the log2 fold change 
+original_gene_list <- d1.df$log2FoldChange
+
+# name the vector
+names(original_gene_list) <- d1.df$SYMBOL
+
+# omit any NA values 
+gene_list<-na.omit(original_gene_list)
+
+# sort the list in decreasing order (required for clusterProfiler)
+gene_list = sort(gene_list, decreasing = TRUE)
+
+keytypes(org.Mm.eg.db)
+
+```
+```{r}
+gse_1 <- gseGO(geneList=gene_list, 
+             ont ="ALL", 
+             keyType = "SYMBOL", 
+             nPerm = 10000, 
+             minGSSize = 3, 
+             maxGSSize = 800, 
+             pvalueCutoff = 0.05, 
+             verbose = TRUE, 
+             OrgDb = org.Mm.eg.db, 
+             pAdjustMethod = "none")
+
+############################
+abcd <- read.csv("D:\\Shruti\\bulk seq\\1hrvsBM_gse1.csv")
+abcd
+
+
+write.csv(gse_1@result, "D:\\Shruti\\bulk seq\\1hrvsBM_gse1.csv")
+```
+```{r}
+require(DOSE)
+d1_gse <- dotplot(gse_1, showCategory=10, split=".sign") + facet_grid(.~.sign)
+```
+```{r}
+View(gse_1@result)
+library(dplyr)
+```
+
+
+```{r}
+# reading in data from deseq2
+#df = read.csv("drosphila_example_de.csv", header=TRUE)
+
+#GSEA for 2hr vs BM
+# we want the log2 fold change 
+original_gene_list_2 <- d2.df$log2FoldChange
+
+# name the vector
+names(original_gene_list_2) <- d2.df$SYMBOL
+
+# omit any NA values 
+gene_list_2<-na.omit(original_gene_list_2)
+
+# sort the list in decreasing order (required for clusterProfiler)
+gene_list_2 = sort(gene_list_2, decreasing = TRUE)
+
+
+gse_2 <- gseGO(geneList=gene_list_2, 
+             ont ="ALL", 
+             keyType = "SYMBOL", 
+             nPerm = 10000, 
+             minGSSize = 3, 
+             maxGSSize = 800, 
+             pvalueCutoff = 0.05, 
+             verbose = TRUE, 
+             OrgDb = org.Mm.eg.db, 
+             pAdjustMethod = "none")
+
+write.csv(gse_2@result, "D:\\Shruti\\bulk seq\\2hrvsBM_gse2.csv")
+
+require(DOSE)
+d2_gse <- dotplot(gse_2, showCategory=10, split=".sign") + facet_grid(.~.sign)
+```
+```{r}
+# reading in data from deseq2
+#df = read.csv("drosphila_example_de.csv", header=TRUE)
+
+#GSEA for 4hr vs BM
+# we want the log2 fold change 
+original_gene_list_3 <- d3.df$log2FoldChange
+
+# name the vector
+names(original_gene_list_3) <- d3.df$SYMBOL
+
+# omit any NA values 
+gene_list_3<-na.omit(original_gene_list_3)
+
+# sort the list in decreasing order (required for clusterProfiler)
+gene_list_3 = sort(gene_list_3, decreasing = TRUE)
+
+
+gse_3 <- gseGO(geneList=gene_list_3, 
+             ont ="ALL", 
+             keyType = "SYMBOL", 
+             nPerm = 10000, 
+             minGSSize = 3, 
+             maxGSSize = 800, 
+             pvalueCutoff = 0.05, 
+             verbose = TRUE, 
+             OrgDb = org.Mm.eg.db, 
+             pAdjustMethod = "none")
+
+write.csv(gse_3@result, "D:\\Shruti\\bulk seq\\4hrvsBM_gse3.csv")
+
+require(DOSE)
+d3_gse <- dotplot(gse_3, showCategory=10, split=".sign") + facet_grid(.~.sign)
+```
+```{r}
+ggsave("D:\\Shruti\\bulk seq\\4hrvsBM_gse_plot.png", d3_gse, width = 15, height = 15, units = "in", dpi = 900)
+ggsave("D:\\Shruti\\bulk seq\\2hrvsBM_gse_plot.png", d2_gse, width = 15, height = 15, units = "in", dpi = 900)
+ggsave("D:\\Shruti\\bulk seq\\1hrvsBM_gse_plot.png", d1_gse, width = 15, height = 15, units = "in", dpi = 900)
+```
+
+
+```{r}
+library(EnhancedVolcano)
+   
+#1hr vs BM
+ volcano_degsfiltered <- d1.df
+ y.axis.limit <- c(0, 300)
+ 
+ 
+ 
+ volcano_degsfiltered <- na.omit(volcano_degsfiltered)
+rownames(volcano_degsfiltered) <- volcano_degsfiltered$ensembl_gene_id
+    res <- volcano_degsfiltered
+    
+    colnames(res) <- c("Base Mean" , "log2FC", "IfcSE" , "stat","P val", "P adj.", "gene")
+    unique_gene_names <- make.names(res$gene, unique = TRUE)
+    rownames(res) <- unique_gene_names
+    
+    
+     keyvals <- ifelse(res$log2FC < -0.5 & res$`P adj.` <0.05 , 'royalblue',
+      ifelse(res$log2FC > 0.5 & res$`P adj.`<0.05, 'red',
+           ifelse(res$`P adj.`<0.05, "grey","black")))  #This section categorizes genes based on log2 fold change and adjusted p-value, assigning colors to each category.
+    
+    #keyvals[is.na(keyvals)] <- 'black'
+    names(keyvals)[keyvals == 'grey'] <- 'Stably expressed'
+    names(keyvals)[keyvals == 'red'] <- 'Upregulated'
+    names(keyvals)[keyvals == 'black'] <- "Not significant"
+    names(keyvals)[keyvals == 'royalblue'] <- 'Downregulated'
+
+    plotvolcano1 <- EnhancedVolcano(res,
+                                    lab = rownames(res),
+                                    x = 'log2FC',
+                                    y = 'P adj.', selectLab = rownames(res)[which(names(keyvals) %in% c('Upregulated','Downregulated'))],
+                                    xlab = bquote(~Log[2]~ 'fold change'),
+                                    title = "1hr vs BM",
+                                    pCutoff = 0.05,
+                                    FCcutoff = 0.25,
+                                    pointSize = 2.5,
+                                    labSize = 3,
+                                   # ylim =  y.axis.limit,
+                                    colCustom = keyvals,
+                                    colAlpha = 1,
+                                    legendPosition = 'top',
+                                    legendLabSize = 10,
+                                    legendIconSize = 5.0,
+                                    drawConnectors = TRUE,
+                                    widthConnectors = 1.0,
+                                    colConnectors = 'black',
+                                    arrowheads = F,
+                                    gridlines.major = F,
+                                    gridlines.minor = FALSE,
+                                    border = 'partial',
+                                    borderWidth = 1.5,
+                                    borderColour = 'black', max.overlaps = 12 , subtitle = " "#, xlim = c(min(res$avg_log2FC)-0.3,max(res$avg_log2FC)+0.3 
+                                   )
+    
+    
+  
+    res
+    
+ggsave("D:\\Shruti\\bulk seq\\1hrvsBM_vp_plot.png", plotvolcano1, width = 15, height = 10, units = "in", dpi = 900) 
+write.csv(res, "D:\\Shruti\\bulk seq\\1hrvsBM_res_vp.csv")
+    
+```
+
+```{r}
+#Enhanced volcano for 2hr vs BM
+ volcano_degsfiltered_1 <- d2.df
+ y.axis.limit <- c(0, 300)
+ 
+ 
+ 
+ volcano_degsfiltered_1 <- na.omit(volcano_degsfiltered_1)
+rownames(volcano_degsfiltered_1) <- volcano_degsfiltered_1$ensembl_gene_id
+    res_1 <- volcano_degsfiltered_1
+    
+    colnames(res_1) <- c("Base Mean" , "log2FC", "IfcSE" , "stat","P val", "P adj.", "gene")
+    unique_gene_names_1 <- make.names(res_1$gene, unique = TRUE)
+    rownames(res_1) <- unique_gene_names_1
+    
+    
+     keyvals <- ifelse(res_1$log2FC < -0.5 & res_1$`P adj.` <0.05 , 'royalblue',
+      ifelse(res_1$log2FC > 0.5 & res_1$`P adj.`<0.05, 'red',
+           ifelse(res_1$`P adj.`<0.05, "grey","black")))
+    
+    #keyvals[is.na(keyvals)] <- 'black'
+    names(keyvals)[keyvals == 'grey'] <- 'Stably expressed'
+    names(keyvals)[keyvals == 'red'] <- 'Upregulated'
+    names(keyvals)[keyvals == 'black'] <- "Not significant"
+    names(keyvals)[keyvals == 'royalblue'] <- 'Downregulated'
+
+    plotvolcano2 <- EnhancedVolcano(res_1,
+                                    lab = rownames(res_1),
+                                    x = 'log2FC',
+                                    y = 'P adj.', selectLab = rownames(res_1)[which(names(keyvals) %in% c('Upregulated','Downregulated'))],
+                                    xlab = bquote(~Log[2]~ 'fold change'),
+                                    title = "2hr vs BM",
+                                    pCutoff = 0.05,
+                                    FCcutoff = 0.5,
+                                    pointSize = 2.5,
+                                    labSize = 3,
+                                   # ylim =  y.axis.limit,
+                                    colCustom = keyvals,
+                                    colAlpha = 1,
+                                    legendPosition = 'top',
+                                    legendLabSize = 10,
+                                    legendIconSize = 5.0,
+                                    drawConnectors = TRUE,
+                                    widthConnectors = 1.0,
+                                    colConnectors = 'black',
+                                    arrowheads = F,
+                                    gridlines.major = F,
+                                    gridlines.minor = FALSE,
+                                    border = 'partial',
+                                    borderWidth = 1.5,
+                                    borderColour = 'black', max.overlaps = 12 , subtitle = " "#, xlim = c(min(res$avg_log2FC)-0.3,max(res$avg_log2FC)+0.3 
+                                   )
+    
+    
+  
+
+    
+ggsave("D:\\Shruti\\bulk seq\\2hrvsBM_vp_plot.png", plotvolcano2, width = 15, height = 10, units = "in", dpi = 900)
+write.csv(res_1, "D:\\Shruti\\bulk seq\\2hrvsBM_res_vp.csv")
+    
+```
+```{r}
+
+#Enhanced volcano for 4hr vs BM
+volcano_degsfiltered_3 <- d3.df
+ y.axis.limit <- c(0, 300)
+ 
+ 
+ 
+ volcano_degsfiltered_3 <- na.omit(volcano_degsfiltered_3)
+rownames(volcano_degsfiltered_3) <- volcano_degsfiltered_3$ensembl_gene_id
+    res_3 <- volcano_degsfiltered_3
+    
+    colnames(res_3) <- c("Base Mean" , "log2FC", "IfcSE" , "stat","P val", "P adj.", "gene")
+    unique_gene_names_3 <- make.names(res_3$gene, unique = TRUE)
+    rownames(res_3) <- unique_gene_names_3
+    
+    
+     keyvals <- ifelse(res_3$log2FC < -0.5 & res_3$`P adj.` <0.05 , 'royalblue',
+      ifelse(res_3$log2FC > 0.5 & res_3$`P adj.`<0.05, 'red',
+           ifelse(res_3$`P adj.`<0.05, "grey","black")))
+    
+    #keyvals[is.na(keyvals)] <- 'black'
+    names(keyvals)[keyvals == 'grey'] <- 'Stably expressed'
+    names(keyvals)[keyvals == 'red'] <- 'Upregulated'
+    names(keyvals)[keyvals == 'black'] <- "Not significant"
+    names(keyvals)[keyvals == 'royalblue'] <- 'Downregulated'
+
+    plotvolcano3 <- EnhancedVolcano(res_3,
+                                    lab = rownames(res_3),
+                                    x = 'log2FC',
+                                    y = 'P adj.', selectLab = rownames(res_3)[which(names(keyvals) %in% c('Upregulated','Downregulated'))],
+                                    xlab = bquote(~Log[2]~ 'fold change'),
+                                    title = "4hr vs BM",
+                                    pCutoff = 0.05,
+                                    FCcutoff = 0.5,
+                                    pointSize = 2.5,
+                                    labSize = 3,
+                                   # ylim =  y.axis.limit,
+                                    colCustom = keyvals,
+                                    colAlpha = 1,
+                                    legendPosition = 'top',
+                                    legendLabSize = 10,
+                                    legendIconSize = 5.0,
+                                    drawConnectors = TRUE,
+                                    widthConnectors = 1.0,
+                                    colConnectors = 'black',
+                                    arrowheads = F,
+                                    gridlines.major = F,
+                                    gridlines.minor = FALSE,
+                                    border = 'partial',
+                                    borderWidth = 1.5,
+                                    borderColour = 'black', max.overlaps = 12 , subtitle = " "#, xlim = c(min(res$avg_log2FC)-0.3,max(res$avg_log2FC)+0.3 
+                                   )
+    
+    
+  
+
+    
+ggsave("D:\\Shruti\\bulk seq\\4hrvsBM_vp_plot.png", plotvolcano3, width = 15, height = 10, units = "in", dpi = 900) 
+write.csv(res_3, "D:\\Shruti\\bulk seq\\4hrvsBM_res_vp.csv")
+```
+
+```{r}
+library(pheatmap)
+```
+
+
+```{r}
+rld <- rlog(dds_2, blind = F) #variance stabilization of dds2 object
+
+#Pheatmaps for 2hr vs BM
+degs <- d2.df
+
+top_hits <- degs[order(-degs$log2FoldChange), ]
+top_hits <- row.names(top_hits)[1:200]
+
+# Subset the rows from d2 corresponding to the top hits
+top_hit_symbols <- d2.df[top_hits, "SYMBOL"]
+
+# Create exp_matrix with row names as symbols
+exp_matrix <- as.data.frame(assay(rld)[top_hits, ])
+rownames(exp_matrix) <- top_hit_symbols
+
+# Order the columns of the heatmap
+sample_seq <- c("163_CRE_B_M", "167_CRE_B_M", "170_CRE_B_M", "163_CRE_1hr", "167_CRE_1hr", "170_CRE_1hr", "163_CRE_2hr", "167_CRE_2hr", "170_CRE_2hr", "163_CRE_4hr", "167_CRE_4hr", "170_CRE_4hr") 
+exp_matrix <- exp_matrix[, sample_seq]
+
+# Define new column names
+new_col_names <- c("R1_NO_DCZ","R2_NO_DCZ","R3_NO_DCZ","R1_DCZ_1hr", "R2_DCZ_1hr","R3_DCZ_1hr","R1_DCZ_2hr","R2_DCZ_2hr","R3_DCZ_2hr","R1_DCZ_4hr","R2_DCZ_4hr","R3_DCZ_4hr")   # Replace ... with the rest of your column names
+
+colnames(exp_matrix) <- new_col_names
+
+
+# Show info regarding treatment and mouse in heatmap
+annot_info <- as.data.frame(colData(dds_2)[, c("treatment", "mouse")])
+rownames(annot_info) <- new_col_names
+
+p_final <- pheatmap(exp_matrix, cluster_rows = T, cluster_cols = F, show_rownames = T, annotation_col = annot_info,  scale = "row")
+
+p_final
+ggsave("D:\\Shruti\\bulk seq\\2hrvsBM_hm_finalplot1.png", p_final, width = 20, height = 30, units = "in", dpi = 900) 
+ggsave("D:\\Shruti\\bulk seq\\2hrvsBM_hm_finalplot1.pdf", p_final, width = 12, height = 20, units = "in", dpi = 900) 
+
+```
+
+```{r}
+#Pheatmaps for 1 hr vs BM
+degs <- d1.df
+
+top_hits <- degs[order(-degs$log2FoldChange), ]
+top_hits <- row.names(top_hits)[1:200]
+
+# Subset the rows from d2 corresponding to the top hits
+top_hit_symbols <- d1.df[top_hits, "SYMBOL"]
+unique_row_names <- paste0(top_hit_symbols, "_", seq_along(top_hit_symbols))
+
+
+# Create exp_matrix with row names as symbols
+exp_matrix <- as.data.frame(assay(rld)[top_hits, ])
+rownames(exp_matrix) <- top_hit_symbols
+
+
+# Order the columns of the heatmap
+sample_seq <- c("163_CRE_B_M", "167_CRE_B_M", "170_CRE_B_M", "163_CRE_1hr", "167_CRE_1hr", "170_CRE_1hr", "163_CRE_2hr", "167_CRE_2hr", "170_CRE_2hr", "163_CRE_4hr", "167_CRE_4hr", "170_CRE_4hr") 
+exp_matrix <- exp_matrix[, sample_seq]
+
+# Define new column names
+new_col_names <- c("R1_NO_DCZ","R2_NO_DCZ","R3_NO_DCZ","R1_DCZ_1hr", "R2_DCZ_1hr","R3_DCZ_1hr","R1_DCZ_2hr","R2_DCZ_2hr","R3_DCZ_2hr","R1_DCZ_4hr","R2_DCZ_4hr","R3_DCZ_4hr")   # Replace ... with the rest of your column names
+
+colnames(exp_matrix) <- new_col_names
+
+
+# Show info regarding treatment and mouse in heatmap
+annot_info <- as.data.frame(colData(dds_2)[, c("treatment", "mouse")])
+rownames(annot_info) <- new_col_names
+
+p5 <- pheatmap(exp_matrix, cluster_rows = T, cluster_cols = F, show_rownames = T, annotation_col = annot_info, scale = "row")
+
+p5
+ggsave("D:\\Shruti\\bulk seq\\1hrvsBM_hm_plot.png", p5, width = 20, height = 30, units = "in", dpi = 900) 
+
+```
+
+```{r}
+#pheatmaps for 4hr vs BM
+degs <- d3.df
+
+top_hits <- degs[order(-degs$log2FoldChange), ]
+top_hits <- row.names(top_hits)[1:200]
+
+# Subset the rows from d2 corresponding to the top hits
+top_hit_symbols <- d3.df[top_hits, "SYMBOL"]
+unique_row_names <- paste0(top_hit_symbols, "_", seq_along(top_hit_symbols))
+
+# Create exp_matrix with row names as symbols
+exp_matrix <- as.data.frame(assay(rld)[top_hits, ])
+rownames(exp_matrix) <- top_hit_symbols
+
+# Order the columns of the heatmap
+sample_seq <- c("163_CRE_B_M", "167_CRE_B_M", "170_CRE_B_M", "163_CRE_1hr", "167_CRE_1hr", "170_CRE_1hr", "163_CRE_2hr", "167_CRE_2hr", "170_CRE_2hr", "163_CRE_4hr", "167_CRE_4hr", "170_CRE_4hr") 
+exp_matrix <- exp_matrix[, sample_seq]
+
+# Define new column names
+new_col_names <- c("R1_NO_DCZ","R2_NO_DCZ","R3_NO_DCZ","R1_DCZ_1hr", "R2_DCZ_1hr","R3_DCZ_1hr","R1_DCZ_2hr","R2_DCZ_2hr","R3_DCZ_2hr","R1_DCZ_4hr","R2_DCZ_4hr","R3_DCZ_4hr")   # Replace ... with the rest of your column names
+
+colnames(exp_matrix) <- new_col_names
+
+
+# Show info regarding treatment and mouse in heatmap
+annot_info <- as.data.frame(colData(dds_2)[, c("treatment", "mouse")])
+rownames(annot_info) <- new_col_names
+
+p4 <- pheatmap(exp_matrix, cluster_rows = T, cluster_cols = F, show_rownames = T, annotation_col = annot_info, scale = "row")
+
+p4
+ggsave("D:\\Shruti\\bulk seq\\4hrvsBM_hm_plot.png", p4, width = 20, height = 30, units = "in", dpi = 900) 
+
+
+```
+
+
+
+```{r}
+# # Load required libraries
+# library(org.Mm.eg.db)  # Assuming you're working with Mouse data
+# library(clusterProfiler)
+# 
+# # Read in the data
+# df1 <- read.csv("D:\\Shruti\\bulk seq\\to_upload_1hrvsBM.csv")
+# 
+# # Extract relevant columns
+# original_gene_list <- df1$log2FoldChange
+# names(original_gene_list) <- df1$ensmbl_gene_id
+# 
+# # Remove NA values
+# gene_list <- na.omit(original_gene_list)
+# 
+# # Sort the gene list in decreasing order
+# gene_list <- sort(gene_list, decreasing = TRUE)
+# 
+# # Convert gene IDs to ENTREZ IDs
+# ids <- bitr(names(gene_list), fromType = "SYMBOL", toType = "ENTREZID", OrgDb = org.Mm.eg.db)
+# 
+# # Remove duplicate ENTREZ IDs
+# dedup_ids <- ids[!duplicated(ids[c("SYMBOL")]),]
+# 
+# # Create a new dataframe df2 with only successfully mapped genes
+# df2 <- df1[df1$ensmbl_gene_id %in% dedup_ids$SYMBOL, ]
+# 
+# # Create a new column in df2 with corresponding ENTREZ IDs
+# df2$ENTREZID <- dedup_ids$ENTREZID[match(df2$ensmbl_gene_id, dedup_ids$SYMBOL)]
+# 
+# # Create a vector of the gene universe
+# kegg_gene_list <- df2$log2FoldChange
+# names(kegg_gene_list) <- df2$ENTREZID
+# 
+# # Remove NA values
+# kegg_gene_list <- na.omit(kegg_gene_list)
+# 
+# # Sort the gene list in decreasing order
+# kegg_gene_list <- sort(kegg_gene_list, decreasing = TRUE)
+# head(kegg_gene_list)
+# 
+# # Perform KEGG pathway analysis
+# kegg_enrich <- enrichKEGG(gene = kegg_gene_list)
+# 
+# # View the enriched KEGG pathways
+# print(kegg_enrich)
+# 
+# 
+# # Convert numeric gene IDs to character strings
+# gene_ids <- as.character(names(kegg_gene_list))
+# 
+# # Combine gene IDs and corresponding log2 fold change values into a dataframe
+# gene_data <- data.frame(ID = gene_ids, logFC = kegg_gene_list, stringsAsFactors = FALSE)
+# 
+# # Perform KEGG pathway enrichment analysis
+# kegg_enrich <- enrichKEGG(gene = gene_data)
+# 
+# # View the enrichment result
+# print(kegg_enrich)
+```
+
+
+#KEGG PATHWAY
+```{r}
+library(pathview)
+library(gage)
+install.packages("gageData")
+library(gageData)
+
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("gageData")
+
+columns(org.Mm.eg.db)
+d1.df$ENTREZ <- mapIds(org.Mm.eg.db, keys = rownames(d1.df), keytype = "ENSEMBL", column = "ENTREZID") #map ENTREZ ids needed for KEGG pathway
+
+foldchange_1 <- d1.df$log2FoldChange
+names(foldchange_1) <- d1.df$ENTREZ
+head(foldchange_1)
+```
+
+```{r}
+data("go.sets.mm")
+data("go.subs.mm")
+```
+
+```{r}
+goBPsets <- go.sets.mm[go.subs.mm$BP] #taking only Biological Processes from the sets
+goBPres <- gage(exprs = foldchange_1, gsets = goBPsets, same.dir = TRUE)
+
+View(goBPres$greater)
+view(goBPres$less)
+
+write.csv(goBPres$greater,"D:\\Shruti\\bulk seq\\1hrvsBM_GO_greater.csv")
+write.csv(goBPres$less,"D:\\Shruti\\bulk seq\\1hrvsBM_GO_less.csv")
+
+```
+
+```{r}
+data("kegg.sets.mm")
+data("sigmet.idx.mm") #subset of the kegg data
+kegg.sets.mm <- kegg.sets.mm[sigmet.idx.mm]
+```
+
+```{r}
+keggres <- gage(exprs = foldchange_1, gsets = kegg.sets.mm, same.dir = TRUE)
+View(keggres$greater)
+View(keggres$less)
+
+write.csv(keggres$greater,"D:\\Shruti\\bulk seq\\1hrvsBM_kegg_greater.csv")
+write.csv(keggres$less,"D:\\Shruti\\bulk seq\\1hrvsBM_kegg_less.csv")
+
+```
+
+```{r}
+library(dplyr)
+keggrespathways <- data.frame(id = rownames(keggres$greater), keggres$greater)%>%
+  tibble::as.tibble()%>%
+  filter(row_number()<=30)%>%
+  .$id %>%
+  as.character()
+
+keggrespathways
+```
+
+```{r}
+keggresids <- substr(keggrespathways, start = 1, stop=8) #to take only mmu part
+keggresids
+```
+```{r}
+tmp = sapply(keggresids, function(pid) pathview(gene.data = foldchange_1, pathway.id = pid, species = "mmu")) #for the pathview
+```
+
+
+```{r}
+rld <- rlog(dds_2, blind = F) #variance stabilization of dds2 object
+
+#Pheatmaps for 2hr vs BM only upregulated
+degs <- d2_DEG_up
+
+top_hits <- degs[order(-degs$log2FoldChange), ]
+top_hits <- row.names(top_hits)[1:200]
+
+# Subset the rows from d2 corresponding to the top hits
+top_hit_symbols <- d2_DEG_up[top_hits, "SYMBOL"]
+unique_row_names <- paste0(top_hit_symbols, "_", seq_along(top_hit_symbols))
+
+# Create exp_matrix with row names as symbols
+exp_matrix <- as.data.frame(assay(rld)[top_hits, ])
+rownames(exp_matrix) <- top_hit_symbols
+
+# Define new column names
+new_col_names <- c("R1_DCZ_1hr", "R1_DCZ_2hr","R1_DCZ_4hr","R1_NO_DCZ","R2_DCZ_1hr","R2_DCZ_2hr","R2_DCZ_4hr","R2_NO_DCZ","R3_DCZ_1hr","R3_DCZ_2hr","R3_DCZ_4hr","R3_NO_DCZ")   # Replace ... with the rest of your column names
+
+colnames(exp_matrix) <- new_col_names
+
+
+# Order the columns of the heatmap
+sample_seq <- c("R1_DCZ_1hr", "R1_DCZ_2hr","R1_DCZ_4hr","R1_NO_DCZ","R2_DCZ_1hr","R2_DCZ_2hr","R2_DCZ_4hr","R2_NO_DCZ","R3_DCZ_1hr","R3_DCZ_2hr","R3_DCZ_4hr","R3_NO_DCZ") 
+exp_matrix <- exp_matrix[, sample_seq]
+
+# Show info regarding treatment and mouse in heatmap
+annot_info <- as.data.frame(colData(dds_2)[, c("treatment", "mouse")])
+rownames(annot_info) <- new_col_names
+
+p_up <- pheatmap(exp_matrix, cluster_rows = T, cluster_cols = F, show_rownames = T, annotation_col = annot_info, scale = "row")
+
+p_up
+
+ggsave("D:\\Shruti\\bulk seq\\2hrvsBM_hm_upregualted_plot.png", p_up, width = 15, height = 10, units = "in", dpi = 900)
+```
+
+```{r}
+library(clusterProfiler)
+library(org.Mm.eg.db)
+library(AnnotationDbi)
+```
+
+```{r}
+genes_to_test <- rownames(d1[d1$log2FoldChange > 0.5,])
+GO_results <- enrichGO(gene = genes_to_test, OrgDb = "org.Mm.eg.db", keyType = "ENSEMBL", ont = "BP")
+```
+
