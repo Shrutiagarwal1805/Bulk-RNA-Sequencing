@@ -34,5 +34,3 @@ BiocManager::install("pheatmap")
 - [pheatmap](https://cran.r-project.org/web/packages/pheatmap/index.html) for heatmap generation.
 
 ---
-
-Feel free to customize this template to better fit your project's specifics, such as adding more detailed instructions, additional dependencies, or specific acknowledgments.
